@@ -1,13 +1,16 @@
 import re
 import os
 import click
+import m3u8
 from operator import itemgetter
 from pathlib import Path
 from crayons import green, red
 from baranomi import Baranomi
-from patman import Patman
 import json
 import faster_than_requests as requests
+
+
+
 
 class FileIOHandling(object):
     def __init__(self, folder) -> None:
@@ -186,7 +189,7 @@ def config(ctx):
 @click.option('--sub_folder', '-s', prompt='Which subfolder?', default="", help='Explain which subfolder you want to add')
 @click.option('--url', '-u', prompt='Which url?', help='Add a url to download from')
 @click.pass_context
-def download(ctx, sub_folder, url):
+def download(ctx, sub_folder:str, url:str):
     sub = (Path(ctx.obj['down_folder']) / sub_folder)
     sub.mkdir(parents=True, exist_ok=True)
     derp = requests.post(url, json.dumps({}))
@@ -203,6 +206,28 @@ def hello(folder, glob, output):
     file_io_handler.glob = glob
     file_io_handler.search_glob()
     file_io_handler.safe_save(output)
+
+@main.command()
+@click.option('--sub-folder', '-s', prompt='Which subfolder?', default="", help='Explain which subfolder you want to add')
+@click.option('--file-name', '-f', prompt='Give a file name', help='Explain which subfolder you want to add')
+@click.pass_context
+def load(ctx, sub_folder:str, file_name:str):
+    sub = (Path(ctx.obj['out_folder']) / sub_folder)
+
+    _file = (sub / file_name)
+    if not _file.exists():
+        click.echo(red("File does not exist"))
+    
+    suffix = _file.suffixes
+    joined_suffix = "".join(suffix)
+    if joined_suffix == ".m3u8":
+        opened = _file.open(mode="r")
+        information = opened.read()
+        m3u8_obj = m3u8.loads(information)
+        for segment in m3u8_obj.segments:
+            click.echo(segment)
+    else:
+        pass
 
 
 if __name__ == '__main__':
