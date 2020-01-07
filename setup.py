@@ -59,7 +59,7 @@ setup(
     ],
     entry_points='''
         [console_scripts]
-        splitcell=splitter_cell.main:hello
+        splitcell=splitter_cell.main:main
     ''',
     cmdclass={"upload": UploadCommand},
 )
