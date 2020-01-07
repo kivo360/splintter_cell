@@ -1,0 +1,4 @@
+
+        [console_scripts]
+        splitcell=splitter_cell.main:hello
+    
