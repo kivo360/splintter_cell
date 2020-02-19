@@ -6,9 +6,8 @@ from operator import itemgetter
 from pathlib import Path
 from crayons import green, red
 from baranomi import Baranomi
-from glob import glob
+import wget
 import json
-import faster_than_requests as requests
 
 
 class FileIOHandling(object):
@@ -186,9 +185,8 @@ def config(ctx):
 def download(ctx, sub_folder: str, url: str):
     sub = (Path(ctx.obj['down_folder']) / sub_folder)
     sub.mkdir(parents=True, exist_ok=True)
-    derp = requests.post(url, json.dumps({}))
-    print(derp)
-    # click.echo(sub)
+    file = wget.download(url, out=sub.absolute().as_posix())
+    click.echo("File Path: " + green(file))
 
 
 @main.command()
