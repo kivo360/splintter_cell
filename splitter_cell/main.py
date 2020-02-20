@@ -57,7 +57,9 @@ class FileIOHandling(object):
 
     @download_folder.setter
     def download_folder(self, down_folder: str):
-        self._download_folder = Path(f"{down_folder}").mkdir(parents=True, exist_ok=True)
+        self._download_folder = (Path(f"{self._download_folder}") / down_folder)
+        click.echo("Down-folder: "+ green(self._download_folder))
+        self._download_folder.mkdir(parents=True, exist_ok=True)
 
     @property
     def output_folder(self):
@@ -65,7 +67,9 @@ class FileIOHandling(object):
 
     @output_folder.setter
     def output_folder(self, _output_folder):
-        self._output_folder = Path(f"{_output_folder}").mkdir(parents=True, exist_ok=True)
+        self._output_folder = (Path(f"{self._output_folder}") / _output_folder)
+        click.echo("Output-folder: "+ green(self._output_folder))
+        self.output_folder.mkdir(parents=True, exist_ok=True)
 
     def _check_is_absolute(self, _folder):
         """ Checks if the folder is absolute or not. """
@@ -81,6 +85,9 @@ class FileIOHandling(object):
             current_glob_paths = list(self.given_folder_absolute.glob('*'))
             abs_glob_paths = [x.absolute() for x in current_glob_paths]
             self.glob_paths = abs_glob_paths
+            click.echo("Merged Paths:")
+            for path in abs_glob_paths:
+                click.echo(green(path))
             return self.glob_paths
         return self.glob_paths
 
@@ -107,7 +114,7 @@ class FileIOHandling(object):
                 Baranomi()
                     .load_file_list_as_bytes(file_list)
                     .join()
-                    .save(output_name)
+                    .save(f'{self._output_folder}/{output_name}')
             )
 
 
@@ -178,7 +185,7 @@ def config(ctx):
 
 
 @main.command()
-@click.option('--sub_folder', '-s', prompt='Which subfolder?', default="",
+@click.option('--sub_folder', '-s', prompt='Which subfolder?', default=False,
               help='Explain which subfolder you want to add')
 @click.option('--url', '-u', prompt='Which url?', help='Add a url to download from')
 @click.pass_context
@@ -190,14 +197,24 @@ def download(ctx, sub_folder: str, url: str):
 
 
 @main.command()
-@click.option('--folder', prompt='Which folder?', default="", help='The person to greet.')
+@click.option('--folder', prompt='Which folder?', default=False, help='The folder where the files are')
 @click.option('--glob', prompt='What glob command do you plan on using?', help='The files you\'re trying to join')
-@click.option('--output', prompt='What output file name', help="The file output name")
-def merge(folder, glob, output):
+@click.option('--out_folder', prompt='Output folder?', default=False, help='Folder to store output')
+@click.option('--output', prompt='What output file name?', help="The file output name")
+@click.pass_context
+def merge(ctx, folder: str, glob: str, out_folder: str, output: str):
     """Get a folder we want to search in, then get the glob necessary to find all of the files we want to merge together."""
-    file_io_handler = FileIOHandling(folder)
+    if folder:
+        file_io_handler = FileIOHandling(folder)
+    else:
+        file_io_handler = FileIOHandling(ctx.obj['down_folder'])
     file_io_handler.glob = glob
     file_io_handler.search_glob()
+
+    if out_folder:
+        file_io_handler.output_folder = out_folder
+    else:
+        file_io_handler.output_folder = ctx.obj['out_folder']
     file_io_handler.safe_save(output)
 
 
