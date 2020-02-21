@@ -6,10 +6,8 @@ from operator import itemgetter
 from pathlib import Path
 from crayons import green, red
 from baranomi import Baranomi
+import wget
 import json
-import faster_than_requests as requests
-
-
 
 
 class FileIOHandling(object):
@@ -27,7 +25,7 @@ class FileIOHandling(object):
     @property
     def glob(self):
         return self._glob
-    
+
     @glob.setter
     def glob(self, _glob):
         self._glob = _glob
@@ -35,7 +33,7 @@ class FileIOHandling(object):
     @property
     def exists(self):
         return self.is_exist
-    
+
     @property
     def glob_paths(self):
         return self._globs
@@ -43,32 +41,35 @@ class FileIOHandling(object):
     @glob_paths.setter
     def glob_paths(self, _globs):
         self._globs = _globs
-    
+
     @property
     def sorted_globs(self):
         file_dict_arr = self.sort_by_number_dicts()
         if len(file_dict_arr) == 0:
             return []
-        file_list = list(map(lambda x:  f"{x.get('parent', '.')}/{x.get('file_name')}", sorted(file_dict_arr, key=itemgetter('index'))))
+        file_list = list(map(lambda x: f"{x.get('parent', '.')}/{x.get('file_name')}",
+                             sorted(file_dict_arr, key=itemgetter('index'))))
         return file_list
 
-    
     @property
     def download_folder(self):
         return self._download_folder
 
     @download_folder.setter
-    def download_folder(self, down_folder:str):
-        self._download_folder = Path(f"{down_folder}").mkdir(parents=True, exist_ok=True)
-    
+    def download_folder(self, down_folder: str):
+        self._download_folder = (Path(f"{self._download_folder}") / down_folder)
+        click.echo("Down-folder: "+ green(self._download_folder))
+        self._download_folder.mkdir(parents=True, exist_ok=True)
+
     @property
     def output_folder(self):
         return self._output_folder
 
     @output_folder.setter
     def output_folder(self, _output_folder):
-        self._output_folder = Path(f"{_output_folder}").mkdir(parents=True, exist_ok=True)
-
+        self._output_folder = (Path(f"{self._output_folder}") / _output_folder)
+        click.echo("Output-folder: "+ green(self._output_folder))
+        self.output_folder.mkdir(parents=True, exist_ok=True)
 
     def _check_is_absolute(self, _folder):
         """ Checks if the folder is absolute or not. """
@@ -81,12 +82,14 @@ class FileIOHandling(object):
     def search_glob(self):
         if self.exists == True:
             click.echo(green("File path exists"))
-            current_glob_paths = list(self.given_folder_absolute.glob(self.glob))
+            current_glob_paths = list(self.given_folder_absolute.glob('*'))
             abs_glob_paths = [x.absolute() for x in current_glob_paths]
             self.glob_paths = abs_glob_paths
+            click.echo("Merged Paths:")
+            for path in abs_glob_paths:
+                click.echo(green(path))
             return self.glob_paths
         return self.glob_paths
-    
 
     def sort_by_number_dicts(self):
         file_dict_arr = []
@@ -103,17 +106,17 @@ class FileIOHandling(object):
                 }
                 file_dict_arr.append(item)
         return file_dict_arr
-    
 
     def safe_save(self, output_name):
         file_list = self.sorted_globs
         if len(file_list) > 0:
             (
                 Baranomi()
-                .load_file_list_as_bytes(file_list)
-                .join()
-                .save(output_name)
+                    .load_file_list_as_bytes(file_list)
+                    .join()
+                    .save(f'{self._output_folder}/{output_name}')
             )
+
 
 @click.group()
 @click.option(
@@ -132,9 +135,8 @@ class FileIOHandling(object):
     default='~/.splitter.cfg',
     help='Set where all outputs go.',
 )
-@click.pass_context 
+@click.pass_context
 def main(ctx, download_folder, output_folder, config_file):
-
     filename = os.path.expanduser(config_file)
     if (not download_folder or not output_folder) and os.path.exists(filename):
         with open(filename) as cfg:
@@ -146,9 +148,9 @@ def main(ctx, download_folder, output_folder, config_file):
             'config_file': filename
         }
 
-
     Path(ctx.obj['down_folder']).mkdir(parents=True, exist_ok=True)
     Path(ctx.obj['out_folder']).mkdir(parents=True, exist_ok=True)
+
 
 @main.command()
 @click.pass_context
@@ -163,18 +165,15 @@ def config(ctx):
         default=ctx.obj.get('down_folder', '')
     )
 
-
     out_folder = click.prompt(
         "Please enter your download folder",
         default=ctx.obj.get('out_folder', '')
     )
 
-
     excellent = {
         "down_folder": down_folder,
         "out_folder": out_folder
     }
-
 
     with open(config_file, 'w') as cfg:
         cfg.write(json.dumps(excellent))
@@ -186,38 +185,51 @@ def config(ctx):
 
 
 @main.command()
-@click.option('--sub_folder', '-s', prompt='Which subfolder?', default="", help='Explain which subfolder you want to add')
+@click.option('--sub_folder', '-s', prompt='Which subfolder?', default=False,
+              help='Explain which subfolder you want to add')
 @click.option('--url', '-u', prompt='Which url?', help='Add a url to download from')
 @click.pass_context
-def download(ctx, sub_folder:str, url:str):
+def download(ctx, sub_folder: str, url: str):
     sub = (Path(ctx.obj['down_folder']) / sub_folder)
     sub.mkdir(parents=True, exist_ok=True)
-    derp = requests.post(url, json.dumps({}))
-    print(derp)
-    # click.echo(sub)
+    file = wget.download(url, out=sub.absolute().as_posix())
+    click.echo("File Path: " + green(file))
+
 
 @main.command()
-@click.option('--folder', prompt='Which folder?', default="", help='The person to greet.')
-@click.option('--glob', prompt='What glob command do you plan on using?', help='The files youre trying to join')
-@click.option('--output', prompt='What output file name', help="The file output name")
-def hello(folder, glob, output):
+@click.option('--folder', prompt='Which folder?', default=False, help='The folder where the files are')
+@click.option('--glob', prompt='What glob command do you plan on using?', help='The files you\'re trying to join')
+@click.option('--out_folder', prompt='Output folder?', default=False, help='Folder to store output')
+@click.option('--output', prompt='What output file name?', help="The file output name")
+@click.pass_context
+def merge(ctx, folder: str, glob: str, out_folder: str, output: str):
     """Get a folder we want to search in, then get the glob necessary to find all of the files we want to merge together."""
-    file_io_handler = FileIOHandling(folder)
+    if folder:
+        file_io_handler = FileIOHandling(folder)
+    else:
+        file_io_handler = FileIOHandling(ctx.obj['down_folder'])
     file_io_handler.glob = glob
     file_io_handler.search_glob()
+
+    if out_folder:
+        file_io_handler.output_folder = out_folder
+    else:
+        file_io_handler.output_folder = ctx.obj['out_folder']
     file_io_handler.safe_save(output)
 
+
 @main.command()
-@click.option('--sub-folder', '-s', prompt='Which subfolder?', default="", help='Explain which subfolder you want to add')
-@click.option('--file-name', '-f', prompt='Give a file name', help='Explain which subfolder you want to add')
+@click.option('--sub-folder', '-s', prompt='Which subfolder?', default="",
+              help='Explain which subfolder is that file in?')
+@click.option('--file-name', '-f', prompt='Give a file name', help='Which file you wanna load?')
 @click.pass_context
-def load(ctx, sub_folder:str, file_name:str):
+def load(ctx, sub_folder: str, file_name: str):
     sub = (Path(ctx.obj['out_folder']) / sub_folder)
 
     _file = (sub / file_name)
     if not _file.exists():
         click.echo(red("File does not exist"))
-    
+
     suffix = _file.suffixes
     joined_suffix = "".join(suffix)
     if joined_suffix == ".m3u8":
